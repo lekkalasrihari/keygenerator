@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Certificate Generator Wizard</title>
+<style>
+body { font-family: Arial; margin:0; padding:0; background:#e6f0fa; }
+.navbar { display:flex; justify-content:space-between; align-items:center; background:#0b3d91; padding:15px 30px; color:white; }
+.navbar .logo { font-size:20px; font-weight:bold; }
+.navbar ul { list-style:none; display:flex; gap:20px; margin:0; padding:0; }
+.navbar ul li a { color:white; text-decoration:none; font-weight:bold; cursor:pointer; }
+.navbar ul li a:hover { color:#ffcc00; }
+.container { background:#fff; padding:30px; border-radius:12px; max-width:950px; margin:50px auto; box-shadow:0 8px 25px rgba(0,0,0,0.15); }
+.step { display:none; }
+.step.active { display:block; }
+.step-title { font-weight:bold; font-size:18px; color:#0b3d91; margin-bottom:10px; border-bottom:2px solid #d0d8e8; padding-bottom:5px; }
+.form-row { display:flex; gap:15px; flex-wrap:wrap; margin-bottom:20px; }
+.form-group { flex:1 1 200px; display:flex; flex-direction:column; position:relative; }
+.form-group label { font-weight:bold; margin-bottom:6px; color:#0b3d91; }
+.form-group input, .form-group select { padding:8px; border:1px solid #ccc; border-radius:6px; font-size:14px; width:100%; max-width:250px; }
+.btn { background:#0b3d91; color:white; border:none; padding:12px 18px; border-radius:8px; cursor:pointer; font-size:16px; margin-top:20px; transition:0.3s; }
+.btn:hover { background:#06255b; }
+.nav-buttons { display:flex; justify-content:space-between; margin-top:20px; }
+pre { background:#f2f2f2; padding:10px; border-radius:6px; overflow-x:auto; margin-bottom:15px; white-space: pre-wrap; word-wrap: break-word; }
+.certificate-box { border:1px solid #ccc; padding:10px; border-radius:6px; margin-bottom:15px; }
+.copy-btn, .download-btn { margin-left:10px; cursor:pointer; padding:3px 8px; border-radius:4px; border:none; background:#0b3d91; color:white; }
+.copy-btn:hover, .download-btn:hover { background:#06255b; }
+.add-cert-btn, .remove-cert-btn { margin-top:10px; background:#ff6600; }
+.add-cert-btn:hover, .remove-cert-btn:hover { background:#cc5200; }
+.dropdown-download { margin-top:10px; }
+@media(max-width:700px){ .form-row{flex-direction:column;} }
+</style>
+</head>
+<body>
+<div class="navbar">
+  <div class="logo">Certificate Generator Wizard</div>
+  <ul>
+    <li><a href="#">Home</a></li>
+  </ul>
+</div>
+
+<div class="container">
+
+<!-- Step 1 -->
+<div class="step active" id="step1">
+  <div class="step-title">Step 1: Environment & Domain</div>
+  <div class="form-row">
+    <div class="form-group"><label>Environment</label>
+      <select id="environment" onchange="updateSignedByOptions()">
+        <option value="">-- Select --</option>
+        <option value="DEV">DEV</option>
+        <option value="UAT">UAT</option>
+        <option value="PROD">PROD</option>
+      </select>
+    </div>
+    <div class="form-group"><label>Domain</label>
+      <select id="domain">
+        <option value="">-- Select --</option>
+        <option value="DCC">DCC</option>
+        <option value="PH4H">PH4H</option>
+      </select>
+    </div>
+  </div>
+  <div class="nav-buttons">
+    <div></div>
+    <button class="btn" onclick="nextStep(2)">Next</button>
+  </div>
+</div>
+
+<!-- Step 2 -->
+<div class="step" id="step2">
+  <div class="step-title">Step 2: DN Details</div>
+  <div class="form-row">
+    <div class="form-group"><label>C (Country 2 letters)</label><input id="C" maxlength="2" oninput="this.value=this.value.toUpperCase()" required></div>
+    <div class="form-group"><label>ST (State)</label><input id="ST" required></div>
+    <div class="form-group"><label>L (City/Locality)</label><input id="L" required></div>
+    <div class="form-group"><label>O (Organization)</label><input id="O" required></div>
+    <div class="form-group"><label>OU (Organizational Unit)</label><input id="OU" required></div>
+    <div class="form-group"><label>CN (Common Name)</label><input id="CN" required></div>
+  </div>
+  <div class="nav-buttons">
+    <button class="btn" onclick="prevStep(1)">Back</button>
+    <button class="btn" onclick="nextStep(3)">Next</button>
+  </div>
+</div>
+
+<!-- Step 3 -->
+<div class="step" id="step3">
+  <div class="step-title">Step 3: Certificate Selection</div>
+  <div id="certificates-container"></div>
+  <button class="btn add-cert-btn" onclick="addCertificate()">+ Add Certificate</button>
+  <div class="nav-buttons">
+    <button class="btn" onclick="prevStep(2)">Back</button>
+    <button class="btn" onclick="generateCerts()">Generate</button>
+  </div>
+</div>
+
+<!-- Step 4 -->
+<div class="step" id="step4">
+  <div class="step-title">Step 4: Certificates Output</div>
+  <div id="output"></div>
+  <div class="dropdown-download">
+    <label>Download Options:</label>
+    <select id="downloadOption">
+      <option value="all">All Generated Certificates</option>
+      <option value="onboarding">Onboarding</option>
+    </select>
+    <button class="btn" onclick="downloadSelected()">Download</button>
+  </div>
+  <div class="nav-buttons">
+    <button class="btn" onclick="prevStep(3)">Back</button>
+  </div>
+</div>
+
+</div>
+
+<script>
+let currentStep = 1;
+let certIndex = 0;
+
+function nextStep(step){
+  if(step===2){
+    if(!document.getElementById("environment").value || !document.getElementById("domain").value){
+      alert("Please select environment and domain"); return;
+    }
+  }
+  if(step===3){
+    const dnFields=["C","ST","L","O","OU","CN"];
+    for(let f of dnFields){if(!document.getElementById(f).value){alert("Please fill all DN fields"); return;} }
+  }
+  document.getElementById("step"+currentStep).classList.remove("active");
+  document.getElementById("step"+step).classList.add("active");
+  currentStep=step;
+}
+
+function prevStep(step){
+  document.getElementById("step"+currentStep).classList.remove("active");
+  document.getElementById("step"+step).classList.add("active");
+  currentStep=step;
+}
+
+function addCertificate(){
+  certIndex++;
+  const container=document.getElementById("certificates-container");
+  const div=document.createElement("div");
+  div.className="form-row"; div.id="cert-row-"+certIndex;
+  div.innerHTML=`
+    <div class="form-group"><label>Certificate</label>
+      <select class="cert-select" onchange="updateValidity(this); toggleSignerType(this)">
+        <option value="">--Select--</option>
+        <option value="RootCA">RootCA</option>
+        <option value="SCA">SCA</option>
+        <option value="CA">CA</option>
+        <option value="TLS">TLS</option>
+        <option value="UP">UP</option>
+      </select>
+    </div>
+    <div class="form-group"><label>Validity</label>
+      <select class="validity-select"><option value="">--Select--</option></select>
+    </div>
+    <div class="form-group"><label>Signed By</label>
+      <select class="signedby-select" onchange="toggleSignerType(this)">
+        <option value="">--Select--</option>
+      </select>
+    </div>
+    <div class="form-group signer-type-group" style="display:none">
+      <label>Signer Type</label>
+      <select class="signer-type-select" onchange="toggleSignerFiles(this)">
+        <option value="New">New</option>
+        <option value="Existing">Existing</option>
+      </select>
+      <input type="file" class="signer-pem-file" style="display:none; margin-top:5px;" accept=".pem">
+      <input type="file" class="signer-key-file" style="display:none; margin-top:5px;" accept=".key">
+    </div>
+    <button class="btn remove-cert-btn" onclick="removeCertificate(${certIndex})">Remove</button>
+  `;
+  container.appendChild(div);
+  updateSignedByOptions();
+}
+
+function toggleSignerFiles(sel){
+  const row=sel.closest(".form-row");
+  const pem=row.querySelector(".signer-pem-file");
+  const key=row.querySelector(".signer-key-file");
+  if(sel.value==="Existing"){ pem.style.display="block"; key.style.display="block"; }
+  else{ pem.style.display="none"; key.style.display="none"; }
+}
+
+function removeCertificate(idx){
+  const row=document.getElementById("cert-row-"+idx); if(row) row.remove();
+}
+
+function updateValidity(select){
+  const valSelect=select.closest(".form-row").querySelector(".validity-select");
+  const cert=select.value;
+  valSelect.innerHTML="";
+  if(cert==="SCA") valSelect.innerHTML='<option value="1461">4 Years</option>';
+  else if(cert==="UP" || cert==="TLS") valSelect.innerHTML='<option value="730">2 Years</option>';
+  else if(cert==="CA" || cert==="RootCA") valSelect.innerHTML='<option value="1461">4 Years</option>';
+}
+
+function updateSignedByOptions(){
+  const env=document.getElementById("environment").value;
+  const signedSelects=document.querySelectorAll(".signedby-select");
+  signedSelects.forEach(sel=>{
+    const old=sel.value;
+    sel.innerHTML='<option value="SelfSigned">SelfSigned</option><option value="RootCA">RootCA</option><option value="SCA">SCA</option><option value="CA">CA</option><option value="TLS">TLS</option><option value="UP">UP</option>';
+    sel.value=old;
+  });
+}
+
+function toggleSignerType(sel){
+  const row=sel.closest(".form-row");
+  const signerGroup=row.querySelector(".signer-type-group");
+  const signedBy=row.querySelector(".signedby-select").value;
+  if(signedBy && signedBy!=="SelfSigned") signerGroup.style.display="flex";
+  else signerGroup.style.display="none";
+}
+
+function copyText(id){
+  const txt=document.getElementById(id);
+  navigator.clipboard.writeText(txt.innerText);
+  alert("Copied!");
+}
+
+function downloadFile(filename, content){
+  const a=document.createElement("a");
+  const blob=new Blob([content], {type:"text/plain"});
+  a.href=URL.createObjectURL(blob);
+  a.download=filename;
+  a.click();
+}
+
+function generateCerts(){
+  const env=document.getElementById("environment").value;
+  const domain=document.getElementById("domain").value;
+  const dn={C:document.getElementById("C").value, ST:document.getElementById("ST").value, L:document.getElementById("L").value, O:document.getElementById("O").value, OU:document.getElementById("OU").value, CN:document.getElementById("CN").value};
+  const certRows=document.querySelectorAll("#certificates-container .form-row");
+  if(certRows.length===0){alert("Please add at least one certificate"); return;}
+  const certs=[];
+  certRows.forEach(row=>{
+    const cert=row.querySelector(".cert-select").value;
+    const validity=row.querySelector(".validity-select").value;
+    const signedby=row.querySelector(".signedby-select").value;
+    const signerType=row.querySelector(".signer-type-select")?.value;
+    const pemFile=row.querySelector(".signer-pem-file")?.files[0]||null;
+    const keyFile=row.querySelector(".signer-key-file")?.files[0]||null;
+    if(!cert || !validity || !signedby){alert("Please fill all certificate fields"); return;}
+    certs.push({certificate:cert, validity:validity, signedby:signedby, signerType:signerType, pemFile:pemFile, keyFile:keyFile});
+  });
+
+  fetch("/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({environment:env,domain:domain,dn:dn,certs:certs})})
+  .then(r=>r.json())
+  .then(res=>{
+    if(res.status==="success"){
+      const out=document.getElementById("output");
+      out.innerHTML="";
+      res.certificates.forEach((c,i)=>{
+        let label=c.privateCA?" #PrivateCA":(c.publicCA?" (Submit CSR to Public CA)":"");
+        let html=`<div class="certificate-box">`;
+        if(c.pem) html+=`<strong>${c.name}.pem${label}</strong><button class="copy-btn" onclick="copyText('pem${i}')">Copy</button><button class="download-btn" onclick="downloadFile('${c.name}.pem',\`${c.pem}\`)">Download</button><pre id="pem${i}">${c.pem}</pre>`;
+        if(c.key) html+=`<strong>${c.name}.key${label}</strong><button class="copy-btn" onclick="copyText('key${i}')">Copy</button><button class="download-btn" onclick="downloadFile('${c.name}.key',\`${c.key}\`)">Download</button><pre id="key${i}">${c.key}</pre>`;
+        if(c.csr) html+=`<strong>${c.name}.csr</strong><button class="copy-btn" onclick="copyText('csr${i}')">Copy</button><button class="download-btn" onclick="downloadFile('${c.name}.csr',\`${c.csr}\`)">Download</button><pre id="csr${i}">${c.csr}</pre>`;
+        html+="</div>";
+        out.innerHTML+=html;
+      });
+      nextStep(4);
+    } else alert(res.message);
+  });
+}
+
+function downloadSelected(){
+  const option=document.getElementById("downloadOption").value;
+  fetch(`/download/${option}`).then(r=>r.blob()).then(blob=>{
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);
+    a.download=option+".zip";
+    a.click();
+  });
+}
+
+addCertificate();
+</script>
+</body>
+</html>
